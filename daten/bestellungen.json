@@ -1,0 +1,77 @@
+{
+  "_hinweis": "Erfundene Testdaten. Quelle: testdaten/1_Bestellungen.txt (Bestellliste aus dem ERP-System der LAT). Beträge in Euro netto.",
+  "bestellungen": [
+    {
+      "bestellnummer": "B-4500012",
+      "bestelldatum": "01.10.2026",
+      "lieferantennummer": "L-1001",
+      "lieferant": "Kabelwerk Nordhafen GmbH",
+      "bestelltVon": "Werkstatt Fahrzeugbau",
+      "positionen": [
+        {
+          "pos": "10",
+          "materialnummer": "M-77001",
+          "bezeichnung": "Spezialkabel 4x2,5 mm², Rolle 50 m",
+          "menge": 100,
+          "einheit": "Stück",
+          "einzelpreisNetto": 10.00,
+          "gesamtNetto": 1000.00
+        }
+      ],
+      "zahlungsbedingung": {
+        "text": "14 Tage 2 % Skonto, 30 Tage netto",
+        "skontoTage": 14,
+        "skontoProzent": 2,
+        "nettoTage": 30
+      }
+    },
+    {
+      "bestellnummer": "B-4500013",
+      "bestelldatum": "02.10.2026",
+      "lieferantennummer": "L-1002",
+      "lieferant": "Klemmtechnik Spree GmbH",
+      "bestelltVon": "Montage Signaltechnik",
+      "positionen": [
+        {
+          "pos": "10",
+          "materialnummer": "M-77015",
+          "bezeichnung": "Reihenklemme 6 mm², grau",
+          "menge": 500,
+          "einheit": "Stück",
+          "einzelpreisNetto": 2.40,
+          "gesamtNetto": 1200.00
+        }
+      ],
+      "zahlungsbedingung": {
+        "text": "14 Tage 2 % Skonto, 30 Tage netto",
+        "skontoTage": 14,
+        "skontoProzent": 2,
+        "nettoTage": 30
+      }
+    },
+    {
+      "bestellnummer": "B-4500014",
+      "bestelldatum": "05.10.2026",
+      "lieferantennummer": "L-1003",
+      "lieferant": "Relais & Signal Werke AG",
+      "bestelltVon": "Montage Signaltechnik",
+      "positionen": [
+        {
+          "pos": "10",
+          "materialnummer": "M-78040",
+          "bezeichnung": "Signalrelais 24 V, Bahnausführung",
+          "menge": 20,
+          "einheit": "Stück",
+          "einzelpreisNetto": 85.00,
+          "gesamtNetto": 1700.00
+        }
+      ],
+      "zahlungsbedingung": {
+        "text": "30 Tage netto",
+        "skontoTage": null,
+        "skontoProzent": null,
+        "nettoTage": 30
+      }
+    }
+  ]
+}
