@@ -1,0 +1,26 @@
+{
+  "_hinweis": "Erfundener Lieferantenstamm. Name, Nummer und IBAN aus testdaten/3_Richtlinie_Rechnungspruefung.txt (Abschnitt 6). Telefonnummern und E-Mail-Adressen sind für den Prototyp ergänzt und ebenfalls erfunden (Rufnummernblock 0000, Domain .example ist reserviert und existiert nicht).",
+  "lieferanten": [
+    {
+      "lieferantennummer": "L-1001",
+      "name": "Kabelwerk Nordhafen GmbH",
+      "iban": "DE00 1000 0000 0000 1001 01",
+      "telefon": "+49 40 0000-1001",
+      "email": "buchhaltung@kabelwerk-nordhafen.example"
+    },
+    {
+      "lieferantennummer": "L-1002",
+      "name": "Klemmtechnik Spree GmbH",
+      "iban": "DE00 1000 0000 0000 1002 02",
+      "telefon": "+49 30 0000-1002",
+      "email": "buchhaltung@klemmtechnik-spree.example"
+    },
+    {
+      "lieferantennummer": "L-1003",
+      "name": "Relais & Signal Werke AG",
+      "iban": "DE00 1000 0000 0000 1003 03",
+      "telefon": "+49 89 0000-1003",
+      "email": "buchhaltung@relais-signal.example"
+    }
+  ]
+}

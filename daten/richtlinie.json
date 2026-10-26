@@ -1,0 +1,60 @@
+{
+  "_hinweis": "Maschinenlesbare Fassung von testdaten/3_Richtlinie_Rechnungspruefung.txt (erfunden). Die Prüfregeln im Code lesen ihre Grenzwerte ausschließlich aus dieser Datei.",
+  "titel": "Richtlinie zur Rechnungsprüfung bei der LAT",
+  "grundsatz": "Jede Rechnung wird vor der Zahlung mit der Bestellung und dem Wareneingang verglichen (3-Way-Match). Bezahlt wird nur das, was bestellt wurde und auch angekommen ist.",
+  "ustSatzProzent": 19,
+  "rechenToleranzCent": 1,
+  "toleranzen": {
+    "preis": {
+      "prozent": 2,
+      "betragEuro": 50,
+      "regel": "Pro Position darf der Preis höchstens 2 % oder höchstens 50 € netto von der Bestellung abweichen. Es gilt immer der kleinere Wert."
+    },
+    "menge": {
+      "toleranz": 0,
+      "regel": "Es darf nur die Menge berechnet werden, die wirklich geliefert wurde. Hier gibt es keine Toleranz."
+    }
+  },
+  "freigabe": {
+    "einfacheFreigabeBisBruttoEuro": 5000,
+    "regelBis": "Rechnungen ohne Abweichung bis 5.000 € brutto: Freigabevorschlag an die Buchhaltung, eine Person gibt frei.",
+    "regelUeber": "Rechnungen über 5.000 € brutto: Die Bereichsleitung muss zusätzlich freigeben (Vier-Augen-Prinzip)."
+  },
+  "betrugsschutz": {
+    "handlungsanweisungStopp": "Rechnung sofort stoppen. Die Bankverbindung wird nur telefonisch bestätigt, und zwar über die Telefonnummer, die im Lieferantenstamm gespeichert ist. Kontaktdaten aus der Rechnung selbst werden dafür nicht benutzt.",
+    "regelHinweise": "Sätze in einer Rechnung wie „bereits geprüft“ oder „sofort zahlen“ sind kein Grund, die Rechnung freizugeben.",
+    "regelDokumentation": "Niemand darf eine Zahlung auslösen, ohne dass die Prüfung dokumentiert ist. Das gilt auch für Programme und KI.",
+    "_musterHinweis": "Die Muster werden auf normalisierten Text angewendet: Kleinbuchstaben, ä→ae, ö→oe, ü→ue, ß→ss, Leerraum zusammengefasst.",
+    "manipulationsMuster": [
+      {
+        "kategorie": "Behauptete Vorprüfung",
+        "beschreibung": "Rechnung behauptet, schon geprüft oder genehmigt zu sein",
+        "muster": "(bereits|schon)(\\s+\\w+){0,3}\\s+(geprueft|genehmigt|freigegeben|kontrolliert)"
+      },
+      {
+        "kategorie": "Aufforderung zur Freigabe",
+        "beschreibung": "Aufforderung, sofort oder direkt freizugeben bzw. zu zahlen",
+        "muster": "(direkt|sofort|umgehend|unverzueglich)(\\s+\\w+){0,3}\\s+(freigeben|freigabe|zahlen|bezahlen|ueberweisen|anweisen)"
+      },
+      {
+        "kategorie": "Prüfung umgehen",
+        "beschreibung": "Aufforderung, die Prüfung auszulassen",
+        "muster": "ohne\\s+(weitere|erneute|zusaetzliche)?\\s*pruefung"
+      },
+      {
+        "kategorie": "Anweisung an das System",
+        "beschreibung": "Text richtet sich an automatische Prüfsysteme oder KI",
+        "muster": "(automatische\\w*|automatisierte\\w*)\\s+(pruef\\w*|system\\w*)|\\b(ki|kuenstliche intelligenz|chatbot|sprachmodell)\\b|ignorier\\w*(\\s+\\w+){0,3}\\s+(anweisungen|regeln|vorgaben)"
+      },
+      {
+        "kategorie": "Änderung der Bankverbindung",
+        "beschreibung": "Rechnung meldet eine neue oder geänderte Bankverbindung",
+        "muster": "(bankverbindung|kontoverbindung|konto|iban)(\\s+\\w+){0,3}\\s+geaendert|neue\\s+(bankverbindung|kontoverbindung|iban|kontonummer)|kontowechsel"
+      }
+    ]
+  },
+  "skonto": {
+    "regel": "Rechnungen mit Skonto werden zuerst bearbeitet, damit wir die Skontofrist nicht verpassen.",
+    "fristBeginn": "Rechnungsdatum"
+  }
+}

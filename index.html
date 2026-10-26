@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rechnungsprüfungs-Agent LAT</title>
+<!--
+  Rechnungsprüfungs-Agent (Prototyp, Uni-Projekt, alle Daten erfunden)
+
+  Aufbau dieser Datei – drei getrennte Skript-Blöcke:
+    1. <script id="parser">       Rechnung auslesen (Text -> strukturierte Daten)
+    2. <script id="regeln">       Feste Prüfregeln (3-Way-Match, IBAN, Manipulation, Ergebnis)
+    3. <script id="oberflaeche">  Anzeige, Upload, Protokoll, Entscheidung durch den Menschen
+
+  Blöcke 1 und 2 greifen NICHT auf die Oberfläche zu. Deshalb können die
+  automatischen Tests (tests/agent.test.js) genau diese Blöcke in Node ausführen.
+
+  Das "Wissen" des Agenten (Bestellungen, Wareneingänge, Lieferanten, Richtlinie)
+  liegt getrennt als JSON im Ordner daten/.
+-->
+<style>
+  :root {
+    --text: #1d232a;
+    --text-leise: #56606b;
+    --hintergrund: #f4f5f7;
+    --karte: #ffffff;
+    --rand: #d5d9de;
+    --akzent: #1f5fa8;
+    --ok: #1d7a3e;
+    --ok-hell: #e3f4e8;
+    --klaerung: #8a5a00;
+    --klaerung-hell: #fff3d6;
+    --stopp: #b3261e;
+    --stopp-hell: #fde7e5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--hintergrund);
+    -webkit-text-size-adjust: 100%;
+  }
+  header {
+    background: var(--akzent);
+    color: #fff;
+    padding: 16px 20px;
+  }
+  header h1 { margin: 0; font-size: 1.35rem; }
+  header p { margin: 4px 0 0; opacity: .9; font-size: .95rem; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  section.karte, article.karte {
+    background: var(--karte);
+    border: 1px solid var(--rand);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  h2 { font-size: 1.15rem; margin: 0 0 12px; }
+  h3 { font-size: 1.05rem; margin: 18px 0 8px; }
+  button, .knopf {
+    font: inherit;
+    min-height: 44px;            /* Mindestgröße für Touch-Bedienung auf dem iPad */
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--akzent);
+    background: #fff;
+    color: var(--akzent);
+    cursor: pointer;
+    margin: 4px 8px 4px 0;
+    display: inline-flex;
+    align-items: center;
+  }
+  button.primaer { background: var(--akzent); color: #fff; }
+  button.freigeben { border-color: var(--ok); color: var(--ok); }
+  button.klaeren { border-color: var(--klaerung); color: var(--klaerung); }
+  button.sperren { border-color: var(--stopp); color: var(--stopp); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .ablage {
+    border: 2px dashed var(--rand);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    color: var(--text-leise);
+    margin-top: 8px;
+  }
+  .ablage.aktiv { border-color: var(--akzent); background: #eaf1fb; }
+  .meldung { padding: 10px 12px; border-radius: 8px; margin: 8px 0; }
+  .meldung.fehler { background: var(--stopp-hell); color: var(--stopp); }
+  .meldung.info { background: #eaf1fb; }
+  .tabelle-rahmen { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: .95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px; border-bottom: 1px solid var(--rand); }
+  th { background: #eef0f3; }
+  .status {
+    display: inline-block;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status.OK, .status.FREIGABEVORSCHLAG, .status.FREIGEGEBEN { background: var(--ok-hell); color: var(--ok); }
+  .status.KLAERUNG { background: var(--klaerung-hell); color: var(--klaerung); }
+  .status.STOPP, .status.GESPERRT { background: var(--stopp-hell); color: var(--stopp); }
+  .kopf { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; }
+  .kopf h2 { margin: 0; }
+  .leise { color: var(--text-leise); font-size: .92rem; }
+  ul.kurz { margin: 4px 0; padding-left: 20px; }
+  pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #f7f7f9;
+    border: 1px solid var(--rand);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: .88rem;
+  }
+  .rahmen-stopp { border-left: 6px solid var(--stopp) !important; }
+  .rahmen-klaerung { border-left: 6px solid var(--klaerung) !important; }
+  .rahmen-ok { border-left: 6px solid var(--ok) !important; }
+  .entscheidung { border-top: 1px solid var(--rand); margin-top: 16px; padding-top: 12px; }
+  label { display: block; margin: 6px 0; }
+  input[type=text] { font: inherit; padding: 8px; min-height: 44px; border: 1px solid var(--rand); border-radius: 8px; width: 100%; max-width: 360px; }
+  input[type=checkbox] { width: 22px; height: 22px; vertical-align: middle; margin-right: 8px; }
+  #protokoll { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; max-height: 360px; overflow-y: auto; }
+  #protokoll div { padding: 2px 0; border-bottom: 1px dotted #e3e5e8; }
+  .visuell-versteckt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  details summary { cursor: pointer; min-height: 32px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rechnungsprüfungs-Agent · LAT</h1>
+  <p>Workflow-Agent mit festen Regeln · Autonomiestufe 4 („Approver“): Der Agent schlägt vor, ein Mensch entscheidet. Die App zahlt nie.</p>
+</header>
+
+<main>
+  <section class="karte" aria-labelledby="t-eingang">
+    <h2 id="t-eingang">1. Rechnungseingang</h2>
+    <div id="wissen-status" class="meldung info" role="status">Wissensbasis wird geladen …</div>
+    <button id="knopf-test" class="primaer" type="button" disabled>Testrechnungen laden</button>
+    <label class="knopf" for="datei-eingabe" id="knopf-datei">Rechnungen auswählen (.txt)</label>
+    <input id="datei-eingabe" class="visuell-versteckt" type="file" accept=".txt,text/plain" multiple disabled>
+    <button id="knopf-reset" type="button">Alles zurücksetzen</button>
+    <div id="ablage" class="ablage">Oder .txt-Rechnungen hierher ziehen (Drag-and-Drop)</div>
+    <div id="eingang-meldungen" aria-live="polite"></div>
+  </section>
+
+  <div id="ergebnisse"></div>
+
+  <section class="karte" aria-labelledby="t-protokoll">
+    <div class="kopf">
+      <h2 id="t-protokoll">Protokoll</h2>
+      <button id="knopf-protokoll" type="button">Protokoll herunterladen</button>
+    </div>
+    <p class="leise">Jeder Schritt von Agent und Mensch wird mit Uhrzeit festgehalten (Richtlinie Abschnitt 4: keine Zahlung ohne dokumentierte Prüfung).</p>
+    <div id="protokoll" aria-live="polite"></div>
+  </section>
+</main>
+
+<!-- ======================================================================
+     1. PARSER: Rechnung auslesen
+     Wandelt den Text einer Rechnung in ein Datenobjekt um.
+     Wichtig: Der Text wird nur nach festen Mustern DURCHSUCHT. Er wird nie
+     ausgeführt oder als Anweisung verstanden – er ist reiner Inhalt.
+     ====================================================================== -->
+<script id="parser">
+"use strict";
+
+// Deutsche Zahl ("1.200,00" oder "2,40") in Cent umwandeln.
+// Wir rechnen intern in ganzen Cent, damit keine Rundungsfehler
+// von Kommazahlen entstehen (0,1 + 0,2 ist in JavaScript nicht genau 0,3).
+function zahlZuCent(text) {
+  if (text === null || text === undefined) return null;
+  const bereinigt = String(text).replace(/[€\s]/g, "").replace(/\./g, "").replace(",", ".");
+  if (!/^-?\d+(\.\d+)?$/.test(bereinigt)) return null;   // ungültige Eingabe -> null statt NaN
+  return Math.round(parseFloat(bereinigt) * 100);
+}
+
+// Menge auslesen, z. B. "500" oder "100 Stück".
+function leseMenge(text) {
+  const treffer = String(text || "").match(/-?\d+(?:,\d+)?/);
+  if (!treffer) return null;
+  return parseFloat(treffer[0].replace(",", "."));
+}
+
+// IBAN vereinheitlichen: Leerzeichen entfernen, Großbuchstaben.
+function normalisiereIban(iban) {
+  return String(iban || "").replace(/\s+/g, "").toUpperCase();
+}
+
+// Alle IBAN-artigen Zeichenketten im Text finden (nicht nur die erste!).
+// Eine Rechnung mit zwei verschiedenen IBANs ist selbst schon ein Warnsignal.
+function findeIbans(text) {
+  const muster = /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,4})?\b/g;
+  const gefunden = String(text).match(muster) || [];
+  const eindeutig = [];
+  for (const iban of gefunden) {
+    const n = normalisiereIban(iban);
+    if (!eindeutig.includes(n)) eindeutig.push(n);
+  }
+  return eindeutig;
+}
+
+// Einen Wert hinter einem Schlüsselwort lesen, z. B. "Rechnungsnummer: KS-2026-0418".
+function leseFeld(text, regex) {
+  const treffer = text.match(regex);
+  return treffer ? treffer[1].trim() : null;
+}
+
+// Hauptfunktion des Parsers.
+// Rückgabe: Rechnungsobjekt + Liste der Felder, die nicht gefunden wurden.
+function parseRechnung(text, dateiname) {
+  const t = String(text || "").replace(/\r\n?/g, "\n");
+  const zeilen = t.split("\n").map(z => z.trim());
+
+  // Lieferant: die nicht-leere Zeile direkt vor "Lieferantennummer ..."
+  let lieferant = null;
+  const idxNr = zeilen.findIndex(z => /^Lieferantennummer/i.test(z));
+  for (let i = idxNr - 1; i >= 0; i--) {
+    if (zeilen[i] !== "") { lieferant = zeilen[i]; break; }
+  }
+
+  // Positionen: Tabellenzeilen "Pos | Material | Bezeichnung | Menge | Einzelpreis | Gesamt"
+  const positionen = [];
+  for (const zeile of zeilen) {
+    const zellen = zeile.split("|").map(z => z.trim());
+    if (zellen.length >= 6 && /^\d+$/.test(zellen[0])) {
+      positionen.push({
+        pos: zellen[0],
+        materialnummer: zellen[1],
+        bezeichnung: zellen[2],
+        menge: leseMenge(zellen[3]),
+        einzelpreisCent: zahlZuCent(zellen[4]),
+        gesamtCent: zahlZuCent(zellen[5])
+      });
+    }
+  }
+
+  const ustTreffer = t.match(/USt\.?\s*(\d+(?:,\d+)?)\s*%\s*:\s*([\d.,]+)\s*€?/i);
+  const skontoTreffer = t.match(/(\d+)\s*Tage\w*\s+mit\s+(\d+(?:,\d+)?)\s*%\s*Skonto/i);
+
+  const rechnung = {
+    dateiname: dateiname || null,
+    lieferant: lieferant,
+    lieferantennummer: leseFeld(t, /Lieferantennummer[^:\n]*:\s*([A-Z]-?\d+)/i),
+    rechnungsnummer: leseFeld(t, /Rechnungsnummer\s*:\s*(\S+)/i),
+    rechnungsdatum: leseFeld(t, /Rechnungsdatum\s*:\s*(\d{1,2}\.\d{1,2}\.\d{4})/i),
+    bestellnummer: leseFeld(t, /(?:Ihre Bestellung|Bestellnummer)\s*:\s*(\S+)/i),
+    lieferschein: leseFeld(t, /Lieferschein(?:nummer)?\s*:\s*(\S+)/i),
+    positionen: positionen,
+    nettoCent: zahlZuCent(leseFeld(t, /Summe netto\s*:\s*([\d.,]+)/i)),
+    ustProzent: ustTreffer ? parseFloat(ustTreffer[1].replace(",", ".")) : null,
+    ustCent: ustTreffer ? zahlZuCent(ustTreffer[2]) : null,
+    bruttoCent: zahlZuCent(leseFeld(t, /(?:Rechnungsbetrag|Summe brutto|Gesamtbetrag)\s*:\s*([\d.,]+)/i)),
+    ibans: findeIbans(t),
+    skontoLautRechnung: skontoTreffer
+      ? { tage: parseInt(skontoTreffer[1], 10), prozent: parseFloat(skontoTreffer[2].replace(",", ".")) }
+      : null,
+    rohtext: t          // Originaltext bleibt erhalten – nur zur Anzeige und Manipulationsprüfung
+  };
+
+  // Pflichtfelder prüfen, damit eine unvollständige Rechnung nicht "durchrutscht".
+  const pflicht = {
+    lieferant: "Lieferant", lieferantennummer: "Lieferantennummer", rechnungsnummer: "Rechnungsnummer",
+    rechnungsdatum: "Rechnungsdatum", bestellnummer: "Bestellnummer", nettoCent: "Netto",
+    ustCent: "USt", bruttoCent: "Brutto"
+  };
+  rechnung.fehlendeFelder = Object.keys(pflicht).filter(k => rechnung[k] === null).map(k => pflicht[k]);
+  if (positionen.length === 0) rechnung.fehlendeFelder.push("Positionen");
+  if (rechnung.ibans.length === 0) rechnung.fehlendeFelder.push("IBAN");
+  return rechnung;
+}
+</script>
+
+<!-- ======================================================================
+     2. REGELN: feste, nachvollziehbare Prüfregeln
+     Jede Regel ist eine eigene Funktion. Jede Regel liefert Zeilen für die
+     Prüftabelle: { pruefpunkt, rechnung, bestellung, wareneingang, status, begruendung }
+     status ist immer einer von: "OK", "KLAERUNG", "STOPP".
+     Grenzwerte kommen ausschließlich aus daten/richtlinie.json ("Wissen").
+     Kein Zufall, keine KI: gleiche Eingabe -> gleiches Ergebnis.
+     ====================================================================== -->
+<script id="regeln">
+"use strict";
+
+const STATUS = { OK: "OK", KLAERUNG: "KLAERUNG", STOPP: "STOPP" };
+const ERGEBNIS = { FREIGABE: "FREIGABEVORSCHLAG", KLAERUNG: "KLÄRUNG", STOPP: "STOPP" };
+
+// ---------- Hilfsfunktionen für Anzeige und Datum ----------
+
+// Cent als Euro-Betrag im deutschen Format, z. B. 107100 -> "1.071,00 €".
+// Eigene Funktion statt toLocaleString, damit das Ergebnis überall gleich aussieht.
+function euro(cent) {
+  if (cent === null || cent === undefined || isNaN(cent)) return "–";
+  const negativ = cent < 0;
+  const abs = Math.abs(Math.round(cent));
+  const euroTeil = String(Math.floor(abs / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const centTeil = String(abs % 100).padStart(2, "0");
+  return (negativ ? "-" : "") + euroTeil + "," + centTeil + " €";
+}
+
+function prozentText(wert) {
+  return (Math.round(wert * 10) / 10).toFixed(1).replace(".", ",") + " %";
+}
+
+// "12.10.2026" -> Date (UTC, damit Sommerzeit keine Rolle spielt).
+function parseDatum(text) {
+  const m = String(text || "").match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+  // Ungültige Daten wie 31.02. abfangen
+  if (d.getUTCDate() !== +m[1] || d.getUTCMonth() !== +m[2] - 1) return null;
+  return d;
+}
+
+function datumText(d) {
+  return String(d.getUTCDate()).padStart(2, "0") + "." +
+         String(d.getUTCMonth() + 1).padStart(2, "0") + "." + d.getUTCFullYear();
+}
+
+function plusTage(d, tage) {
+  return new Date(d.getTime() + tage * 86400000);
+}
+
+// Text für die Manipulationsprüfung vereinheitlichen.
+function normalisiereText(text) {
+  return String(text || "").toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .replace(/\s+/g, " ");
+}
+
+// ---------- Wissen nachschlagen ----------
+
+function findeBestellung(wissen, bestellnummer) {
+  return wissen.bestellungen.find(b => b.bestellnummer === bestellnummer) || null;
+}
+
+// Es kann mehrere Wareneingänge (Teillieferungen) zu einer Bestellung geben.
+function findeWareneingaenge(wissen, bestellnummer) {
+  return wissen.wareneingaenge.filter(w => w.bestellnummer === bestellnummer);
+}
+
+function findeLieferant(wissen, lieferantennummer) {
+  return wissen.lieferanten.find(l => l.lieferantennummer === lieferantennummer) || null;
+}
+
+// Summe der gelieferten Menge einer Materialnummer über alle Wareneingänge.
+function gelieferteMenge(wareneingaenge, materialnummer) {
+  let summe = 0;
+  for (const we of wareneingaenge) {
+    for (const p of we.positionen) {
+      if (p.materialnummer === materialnummer) summe += p.geliefert;
+    }
+  }
+  return summe;
+}
+
+function euroZuCent(betrag) {
+  return Math.round(Number(betrag) * 100);
+}
+
+// ---------- REGEL 0: Pflichtangaben ----------
+function regelPflichtangaben(rechnung) {
+  const fehlt = rechnung.fehlendeFelder || [];
+  return [{
+    pruefpunkt: "Pflichtangaben auslesbar",
+    rechnung: fehlt.length ? "fehlt: " + fehlt.join(", ") : "vollständig",
+    bestellung: "–",
+    wareneingang: "–",
+    status: fehlt.length ? STATUS.KLAERUNG : STATUS.OK,
+    begruendung: fehlt.length
+      ? "Folgende Angaben konnten nicht ausgelesen werden: " + fehlt.join(", ") + "."
+      : "Alle Pflichtangaben wurden gefunden."
+  }];
+}
+
+// ---------- REGEL 1: Gibt es Bestellung und Wareneingang? ----------
+function regelBelegeVorhanden(rechnung, bestellung, wareneingaenge) {
+  const zeilen = [];
+  zeilen.push({
+    pruefpunkt: "Bestellung vorhanden",
+    rechnung: rechnung.bestellnummer || "–",
+    bestellung: bestellung ? bestellung.bestellnummer + " vom " + bestellung.bestelldatum : "nicht gefunden",
+    wareneingang: "–",
+    status: bestellung ? STATUS.OK : STATUS.KLAERUNG,
+    begruendung: bestellung
+      ? "Zur Bestellnummer gibt es eine Bestellung."
+      : "Zur Bestellnummer " + (rechnung.bestellnummer || "(keine)") + " gibt es keine Bestellung."
+  });
+  const weText = wareneingaenge.length
+    ? wareneingaenge.map(w => w.wareneingangsnummer + " vom " + w.datum + " (" + w.lieferscheinnummer + ")").join("; ")
+    : "nicht gefunden";
+  zeilen.push({
+    pruefpunkt: "Wareneingang vorhanden",
+    rechnung: rechnung.lieferschein ? "Lieferschein " + rechnung.lieferschein : "–",
+    bestellung: bestellung ? bestellung.bestellnummer : "–",
+    wareneingang: weText,
+    status: wareneingaenge.length ? STATUS.OK : STATUS.KLAERUNG,
+    begruendung: wareneingaenge.length
+      ? "Zur Bestellung ist ein Wareneingang gebucht."
+      : "Es ist noch kein Wareneingang gebucht – es darf nichts bezahlt werden, was nicht angekommen ist."
+  });
+  // Lieferschein der Rechnung muss zu einem gebuchten Wareneingang passen.
+  if (wareneingaenge.length && rechnung.lieferschein) {
+    const passt = wareneingaenge.some(w => w.lieferscheinnummer === rechnung.lieferschein);
+    if (!passt) {
+      zeilen.push({
+        pruefpunkt: "Lieferschein passt zum Wareneingang",
+        rechnung: rechnung.lieferschein,
+        bestellung: "–",
+        wareneingang: wareneingaenge.map(w => w.lieferscheinnummer).join(", "),
+        status: STATUS.KLAERUNG,
+        begruendung: "Der Lieferschein auf der Rechnung ist keinem gebuchten Wareneingang zugeordnet."
+      });
+    }
+  }
+  return zeilen;
+}
+
+// ---------- REGEL 2: Lieferant passt zur Bestellung und ist im Stamm ----------
+function regelLieferant(rechnung, bestellung, lieferant) {
+  const imStamm = !!lieferant;
+  const passtZurBestellung = !bestellung || bestellung.lieferantennummer === rechnung.lieferantennummer;
+  const ok = imStamm && passtZurBestellung;
+  let begruendung = "Lieferant ist im Lieferantenstamm und passt zur Bestellung.";
+  if (!imStamm) begruendung = "Lieferantennummer " + (rechnung.lieferantennummer || "(keine)") + " ist nicht im Lieferantenstamm.";
+  else if (!passtZurBestellung) begruendung = "Die Bestellung gehört zu einem anderen Lieferanten (" + bestellung.lieferantennummer + ").";
+  return [{
+    pruefpunkt: "Lieferant",
+    rechnung: (rechnung.lieferant || "–") + " (" + (rechnung.lieferantennummer || "–") + ")",
+    bestellung: bestellung ? bestellung.lieferant + " (" + bestellung.lieferantennummer + ")" : "–",
+    wareneingang: "–",
+    status: ok ? STATUS.OK : STATUS.KLAERUNG,
+    begruendung: begruendung
+  }];
+}
+
+// ---------- REGEL 3: Menge – nur Geliefertes darf berechnet werden ----------
+function regelMenge(rechnung, bestellung, wareneingaenge, richtlinie) {
+  const toleranz = richtlinie.toleranzen.menge.toleranz;   // laut Richtlinie: 0
+  return rechnung.positionen.map(pos => {
+    const bestPos = bestellung ? bestellung.positionen.find(p => p.materialnummer === pos.materialnummer) : null;
+    const geliefert = gelieferteMenge(wareneingaenge, pos.materialnummer);
+    let status = STATUS.OK;
+    let begruendung = "Berechnete Menge entspricht der gelieferten Menge.";
+    if (!bestPos) {
+      status = STATUS.KLAERUNG;
+      begruendung = "Material " + pos.materialnummer + " wurde nicht bestellt.";
+    } else if (pos.menge === null) {
+      status = STATUS.KLAERUNG;
+      begruendung = "Menge auf der Rechnung nicht lesbar.";
+    } else if (pos.menge > geliefert + toleranz) {
+      status = STATUS.KLAERUNG;
+      begruendung = "Berechnet: " + pos.menge + ", geliefert: " + geliefert + ". " +
+        (pos.menge - geliefert) + " " + (bestPos.einheit || "Stück") + " sind berechnet, aber nicht angekommen.";
+    } else if (pos.menge > bestPos.menge) {
+      status = STATUS.KLAERUNG;
+      begruendung = "Berechnet wurde mehr als bestellt (" + pos.menge + " statt " + bestPos.menge + ").";
+    }
+    return {
+      pruefpunkt: "Menge Pos. " + pos.pos + " (" + pos.materialnummer + ")",
+      rechnung: pos.menge === null ? "–" : String(pos.menge),
+      bestellung: bestPos ? String(bestPos.menge) : "nicht bestellt",
+      wareneingang: wareneingaenge.length ? String(geliefert) + " geliefert" : "kein Wareneingang",
+      status: status,
+      begruendung: begruendung,
+      // Zusatzdaten für den Zahlbetrag:
+      _material: pos.materialnummer, _geliefert: geliefert
+    };
+  });
+}
+
+// Erlaubte Preisabweichung einer Position in Cent:
+// 2 % vom Bestellwert der Position ODER 50 € – es gilt der kleinere Wert.
+function erlaubtePreisabweichungCent(bestellwertPositionCent, richtlinie) {
+  const tol = richtlinie.toleranzen.preis;
+  const prozentGrenze = Math.round(bestellwertPositionCent * tol.prozent / 100);
+  const betragGrenze = euroZuCent(tol.betragEuro);
+  return Math.min(prozentGrenze, betragGrenze);
+}
+
+// ---------- REGEL 4: Preis je Position ----------
+function regelPreis(rechnung, bestellung, richtlinie) {
+  return rechnung.positionen.map(pos => {
+    const bestPos = bestellung ? bestellung.positionen.find(p => p.materialnummer === pos.materialnummer) : null;
+    if (!bestPos || pos.einzelpreisCent === null || pos.menge === null) {
+      return {
+        pruefpunkt: "Preis Pos. " + pos.pos + " (" + pos.materialnummer + ")",
+        rechnung: euro(pos.einzelpreisCent), bestellung: bestPos ? euro(euroZuCent(bestPos.einzelpreisNetto)) : "nicht bestellt",
+        wareneingang: "–", status: STATUS.KLAERUNG,
+        begruendung: "Preis kann nicht mit einer Bestellung verglichen werden.",
+        _material: pos.materialnummer, _preisOk: false, _abweichungProzent: null
+      };
+    }
+    const bestPreisCent = euroZuCent(bestPos.einzelpreisNetto);
+    const diffJeEinheit = pos.einzelpreisCent - bestPreisCent;
+    const abweichungProzent = diffJeEinheit / bestPreisCent * 100;
+    // Abweichung der Position in Euro = Preisdifferenz × berechnete Menge
+    const abweichungPositionCent = diffJeEinheit * pos.menge;
+    const erlaubtCent = erlaubtePreisabweichungCent(bestPreisCent * pos.menge, richtlinie);
+    // Nur ein HÖHERER Preis ist ein Problem. Ein niedrigerer Preis ist für die LAT günstig.
+    const ok = abweichungPositionCent <= erlaubtCent;
+    let begruendung;
+    if (diffJeEinheit === 0) begruendung = "Preis entspricht der Bestellung.";
+    else if (diffJeEinheit < 0) begruendung = "Preis liegt unter dem Bestellpreis (zugunsten der LAT).";
+    else begruendung = "Preis " + prozentText(abweichungProzent) + " über Bestellung, Abweichung der Position " +
+      euro(abweichungPositionCent) + "; erlaubt sind höchstens " + euro(erlaubtCent) +
+      " (kleinerer Wert aus " + richtlinie.toleranzen.preis.prozent + " % und " + richtlinie.toleranzen.preis.betragEuro + " €)." +
+      (ok ? " Innerhalb der Toleranz." : " Toleranz überschritten.");
+    return {
+      pruefpunkt: "Preis Pos. " + pos.pos + " (" + pos.materialnummer + ")",
+      rechnung: euro(pos.einzelpreisCent) + " / Stück",
+      bestellung: euro(bestPreisCent) + " / Stück",
+      wareneingang: "–",
+      status: ok ? STATUS.OK : STATUS.KLAERUNG,
+      begruendung: begruendung,
+      _material: pos.materialnummer, _preisOk: ok, _abweichungProzent: abweichungProzent,
+      _bestPreisCent: bestPreisCent
+    };
+  });
+}
+
+// ---------- REGEL 5: Rechenweg nachrechnen ----------
+function regelRechenweg(rechnung, richtlinie) {
+  const tol = richtlinie.rechenToleranzCent;     // 1 Cent Rundungstoleranz
+  const satz = richtlinie.ustSatzProzent;         // 19 %
+  const zeilen = [];
+  const pruefe = (pruefpunkt, ausRechnung, nachgerechnet, erklaerung) => {
+    const ok = ausRechnung !== null && nachgerechnet !== null && Math.abs(ausRechnung - nachgerechnet) <= tol;
+    zeilen.push({
+      pruefpunkt: pruefpunkt,
+      rechnung: euro(ausRechnung),
+      bestellung: "nachgerechnet: " + euro(nachgerechnet),
+      wareneingang: "–",
+      status: ok ? STATUS.OK : STATUS.KLAERUNG,
+      begruendung: ok ? erklaerung + " stimmt." : erklaerung + " stimmt nicht (Rechnung " + euro(ausRechnung) + ", richtig " + euro(nachgerechnet) + ")."
+    });
+  };
+  let summe = 0;
+  for (const pos of rechnung.positionen) {
+    const soll = (pos.menge !== null && pos.einzelpreisCent !== null) ? Math.round(pos.menge * pos.einzelpreisCent) : null;
+    pruefe("Rechenweg Pos. " + pos.pos, pos.gesamtCent, soll, pos.menge + " × " + euro(pos.einzelpreisCent));
+    summe += pos.gesamtCent || 0;
+  }
+  pruefe("Summe netto", rechnung.nettoCent, summe, "Summe der Positionen");
+  if (rechnung.ustProzent !== null && rechnung.ustProzent !== satz) {
+    zeilen.push({
+      pruefpunkt: "USt-Satz", rechnung: rechnung.ustProzent + " %", bestellung: satz + " %", wareneingang: "–",
+      status: STATUS.KLAERUNG, begruendung: "Falscher Umsatzsteuersatz auf der Rechnung."
+    });
+  }
+  const ustSoll = rechnung.nettoCent !== null ? Math.round(rechnung.nettoCent * satz / 100) : null;
+  pruefe("USt " + satz + " %", rechnung.ustCent, ustSoll, satz + " % von " + euro(rechnung.nettoCent));
+  const bruttoSoll = (rechnung.nettoCent !== null && rechnung.ustCent !== null) ? rechnung.nettoCent + rechnung.ustCent : null;
+  pruefe("Brutto", rechnung.bruttoCent, bruttoSoll, "Netto + USt");
+  return zeilen;
+}
+
+// ---------- REGEL 6: IBAN gegen Lieferantenstamm ----------
+// Abweichende IBAN = typisches Muster von Rechnungsbetrug (CEO-/Fake-Invoice-Fraud) -> STOPP.
+function regelIban(rechnung, lieferant) {
+  const stammIban = lieferant ? normalisiereIban(lieferant.iban) : null;
+  let status = STATUS.OK;
+  let begruendung = "IBAN stimmt mit dem Lieferantenstamm überein.";
+  if (!lieferant) {
+    status = STATUS.KLAERUNG;
+    begruendung = "Lieferant nicht im Stamm – Bankverbindung kann nicht geprüft werden.";
+  } else if (rechnung.ibans.length === 0) {
+    status = STATUS.KLAERUNG;
+    begruendung = "Keine IBAN auf der Rechnung gefunden.";
+  } else if (rechnung.ibans.some(i => i !== stammIban)) {
+    status = STATUS.STOPP;
+    const fremd = rechnung.ibans.filter(i => i !== stammIban);
+    begruendung = "IBAN auf der Rechnung (" + fremd.join(", ") + ") weicht vom Lieferantenstamm ab.";
+  }
+  return [{
+    pruefpunkt: "IBAN / Bankverbindung",
+    rechnung: rechnung.ibans.length ? rechnung.ibans.join(", ") : "–",
+    bestellung: stammIban ? "Stamm: " + stammIban : "–",
+    wareneingang: "–",
+    status: status,
+    begruendung: begruendung
+  }];
+}
+
+// ---------- REGEL 7: Manipulation / versteckte Anweisungen ----------
+// GRUNDSATZ: Text in einer Rechnung ist für das System NIE eine Anweisung,
+// sondern nur Inhalt. Der Agent befolgt keine Sätze aus der Rechnung. Er
+// sucht nur nach festen Mustern aus der Richtlinie und meldet Treffer.
+function findeManipulation(text, richtlinie) {
+  const normal = normalisiereText(text);
+  const treffer = [];
+  for (const m of richtlinie.betrugsschutz.manipulationsMuster) {
+    const regex = new RegExp(m.muster, "g");
+    let t;
+    while ((t = regex.exec(normal)) !== null) {
+      treffer.push({ kategorie: m.kategorie, beschreibung: m.beschreibung, fundstelle: t[0] });
+      if (t[0] === "") regex.lastIndex++;   // Endlosschleife bei leerem Treffer verhindern
+    }
+  }
+  return treffer;
+}
+
+function regelManipulation(rechnung, richtlinie) {
+  const treffer = findeManipulation(rechnung.rohtext, richtlinie);
+  return [{
+    pruefpunkt: "Manipulation / versteckte Anweisung",
+    rechnung: treffer.length ? treffer.map(t => "„" + t.fundstelle + "“").join("; ") : "keine Auffälligkeit",
+    bestellung: "–",
+    wareneingang: "–",
+    status: treffer.length ? STATUS.STOPP : STATUS.OK,
+    begruendung: treffer.length
+      ? "Gefunden: " + Array.from(new Set(treffer.map(t => t.kategorie))).join(", ") +
+        ". Solche Sätze sind laut Richtlinie kein Grund zur Freigabe und werden NICHT befolgt."
+      : "Keine verdächtigen Formulierungen gefunden.",
+    _treffer: treffer
+  }];
+}
+
+// ---------- REGEL 8: Dublette (gleiche Rechnung schon einmal geprüft) ----------
+function regelDublette(rechnung, bekannteRechnungen) {
+  const schluessel = (rechnung.lieferantennummer || "") + "|" + (rechnung.rechnungsnummer || "");
+  const doppelt = (bekannteRechnungen || []).includes(schluessel);
+  return [{
+    pruefpunkt: "Doppelte Rechnung",
+    rechnung: rechnung.rechnungsnummer || "–",
+    bestellung: "–",
+    wareneingang: "–",
+    status: doppelt ? STATUS.KLAERUNG : STATUS.OK,
+    begruendung: doppelt ? "Diese Rechnungsnummer wurde in dieser Sitzung schon geprüft (Gefahr der Doppelzahlung)." : "Keine Dublette.",
+    _intern: true      // interner Befund – gehört nicht in die Mail an den Lieferanten
+  }];
+}
+
+// ---------- Zahlbetrag laut Richtlinie ----------
+// Bezahlt wird nur, was bestellt UND geliefert wurde, zum Bestellpreis
+// (bzw. zum Rechnungspreis, wenn dieser innerhalb der Toleranz liegt).
+function berechneZahlbetrag(rechnung, bestellung, wareneingaenge, preisZeilen, richtlinie) {
+  const rechenweg = [];
+  let nettoCent = 0;
+  for (const pos of rechnung.positionen) {
+    const bestPos = bestellung ? bestellung.positionen.find(p => p.materialnummer === pos.materialnummer) : null;
+    if (!bestPos || pos.menge === null || pos.einzelpreisCent === null) {
+      rechenweg.push("Pos. " + pos.pos + ": nicht bestellt oder nicht lesbar → 0,00 €");
+      continue;
+    }
+    const geliefert = gelieferteMenge(wareneingaenge, pos.materialnummer);
+    const menge = Math.max(0, Math.min(pos.menge, geliefert, bestPos.menge));
+    const preisZeile = preisZeilen.find(z => z._material === pos.materialnummer);
+    const bestPreisCent = euroZuCent(bestPos.einzelpreisNetto);
+    // Innerhalb der Toleranz: Rechnungspreis, sonst Bestellpreis (höchstens das Vereinbarte)
+    const preisCent = (preisZeile && preisZeile._preisOk) ? pos.einzelpreisCent : Math.min(pos.einzelpreisCent, bestPreisCent);
+    const betrag = Math.round(menge * preisCent);
+    nettoCent += betrag;
+    const grundMenge = menge < pos.menge ? " (nur gelieferte Menge statt " + pos.menge + ")" : "";
+    const grundPreis = preisCent !== pos.einzelpreisCent ? " (Bestellpreis statt " + euro(pos.einzelpreisCent) + ")" : "";
+    rechenweg.push("Pos. " + pos.pos + ": " + menge + " Stück" + grundMenge + " × " + euro(preisCent) + grundPreis + " = " + euro(betrag));
+  }
+  const satz = richtlinie.ustSatzProzent;
+  const ustCent = Math.round(nettoCent * satz / 100);
+  const bruttoCent = nettoCent + ustCent;
+  rechenweg.push("Netto zahlbar = " + euro(nettoCent));
+  rechenweg.push("USt " + satz + " % von " + euro(nettoCent) + " = " + euro(ustCent));
+  rechenweg.push("Brutto zahlbar = " + euro(nettoCent) + " + " + euro(ustCent) + " = " + euro(bruttoCent));
+  return { nettoCent: nettoCent, ustCent: ustCent, bruttoCent: bruttoCent, rechenweg: rechenweg };
+}
+
+// ---------- Skonto ----------
+// Zahlungsbedingung aus der Bestellung (vereinbart), Frist ab Rechnungsdatum.
+function berechneSkonto(rechnung, bestellung, zahlbar, heute) {
+  const zb = bestellung ? bestellung.zahlungsbedingung : null;
+  const datum = parseDatum(rechnung.rechnungsdatum);
+  if (!zb || !zb.skontoTage || !datum) return null;
+  const frist = plusTage(datum, zb.skontoTage);
+  const skontoCent = Math.round(zahlbar.bruttoCent * zb.skontoProzent / 100);
+  let hinweis = "";
+  if (heute) {
+    const h = new Date(Date.UTC(heute.getFullYear(), heute.getMonth(), heute.getDate()));
+    const rest = Math.round((frist - h) / 86400000);
+    hinweis = rest < 0 ? "Skontofrist ist abgelaufen." : rest === 0 ? "Heute ist der letzte Tag der Skontofrist!" : "Noch " + rest + " Tag(e).";
+  }
+  return {
+    frist: datumText(frist),
+    fristDatum: frist,
+    prozent: zb.skontoProzent,
+    skontoCent: skontoCent,
+    zahlbetragMitSkontoCent: zahlbar.bruttoCent - skontoCent,
+    nettoFrist: datumText(plusTage(datum, zb.nettoTage)),
+    hinweis: hinweis
+  };
+}
+
+// ---------- Texte für die Anzeige ----------
+
+function erstelleMailEntwurf(rechnung, bestellung, lieferant, zeilen, zahlbar) {
+  const offen = zeilen.filter(z => z.status === STATUS.KLAERUNG && !z._intern);
+  const probleme = offen.map(z => "- " + z.pruefpunkt + ": " + z.begruendung);
+  const mengeOffen = offen.some(z => z.pruefpunkt.startsWith("Menge"));
+  const betreff = "Rückfrage zu Ihrer Rechnung " + (rechnung.rechnungsnummer || "") +
+    (rechnung.bestellnummer ? " (unsere Bestellung " + rechnung.bestellnummer + ")" : "");
+  const text = [
+    "Sehr geehrte Damen und Herren,",
+    "",
+    "vielen Dank für Ihre Rechnung " + (rechnung.rechnungsnummer || "") + " vom " + (rechnung.rechnungsdatum || "–") + ".",
+    "Bei der Prüfung gegen unsere Bestellung und den Wareneingang ist uns Folgendes aufgefallen:",
+    "",
+    probleme.join("\n"),
+    "",
+    "Nach unserer Prüfung können wir derzeit " + euro(zahlbar.nettoCent) + " netto (" + euro(zahlbar.bruttoCent) + " brutto) anerkennen.",
+    "Wir bitten Sie um eine kurze Stellungnahme bzw. eine korrigierte Rechnung oder Gutschrift über die Differenz.",
+    mengeOffen ? "Den Restbetrag begleichen wir gern, sobald die fehlende Menge bei uns eingegangen ist." : "",
+    "",
+    "Vielen Dank für Ihre Unterstützung und freundliche Grüße",
+    "LAT – Kreditorenbuchhaltung"
+  ].join("\n");
+  // Empfänger IMMER aus dem Lieferantenstamm, nie aus dem Rechnungstext.
+  return { an: lieferant ? lieferant.email : "(Lieferant nicht im Stamm – Adresse manuell aus Stammdaten ermitteln)", betreff: betreff, text: text };
+}
+
+function erstelleStoppAnweisung(lieferant, richtlinie, zeilen) {
+  const gruende = zeilen.filter(z => z.status === STATUS.STOPP).map(z => z.pruefpunkt + ": " + z.begruendung);
+  return {
+    gruende: gruende,
+    anweisung: richtlinie.betrugsschutz.handlungsanweisungStopp,
+    rueckruf: lieferant
+      ? "Rückruf bei " + lieferant.name + " unter der Nummer aus dem Lieferantenstamm: " + lieferant.telefon
+      : "Lieferant nicht im Stamm – keine verifizierte Rufnummer vorhanden. Nicht die Nummer aus der Rechnung verwenden!",
+    hinweis: richtlinie.betrugsschutz.regelHinweise
+  };
+}
+
+// ---------- HAUPTFUNKTION: eine Rechnung vollständig prüfen ----------
+// wissen = { bestellungen, wareneingaenge, lieferanten, richtlinie }
+// optionen = { bekannteRechnungen: [...], heute: Date, protokoll: function(text) }
+function pruefeRechnung(rechnung, wissen, optionen) {
+  const opt = optionen || {};
+  const log = typeof opt.protokoll === "function" ? opt.protokoll : function () {};
+  const richtlinie = wissen.richtlinie;
+
+  log("Prüfung gestartet: Rechnung " + (rechnung.rechnungsnummer || "?") + " (" + (rechnung.dateiname || "ohne Dateiname") + ")");
+  const bestellung = findeBestellung(wissen, rechnung.bestellnummer);
+  const wareneingaenge = findeWareneingaenge(wissen, rechnung.bestellnummer);
+  const lieferant = findeLieferant(wissen, rechnung.lieferantennummer);
+  log("Wissen nachgeschlagen: Bestellung " + (bestellung ? "gefunden" : "fehlt") +
+      ", Wareneingänge: " + wareneingaenge.length + ", Lieferant " + (lieferant ? "im Stamm" : "fehlt"));
+
+  // Reihenfolge der Regeln ist fest und immer gleich.
+  const preisZeilen = regelPreis(rechnung, bestellung, richtlinie);
+  const gruppen = [
+    ["Pflichtangaben", regelPflichtangaben(rechnung)],
+    ["Belege", regelBelegeVorhanden(rechnung, bestellung, wareneingaenge)],
+    ["Lieferant", regelLieferant(rechnung, bestellung, lieferant)],
+    ["Menge", regelMenge(rechnung, bestellung, wareneingaenge, richtlinie)],
+    ["Preis", preisZeilen],
+    ["Rechenweg", regelRechenweg(rechnung, richtlinie)],
+    ["IBAN", regelIban(rechnung, lieferant)],
+    ["Manipulation", regelManipulation(rechnung, richtlinie)],
+    ["Dublette", regelDublette(rechnung, opt.bekannteRechnungen)]
+  ];
+  const zeilen = [];
+  for (const [name, ergebnisZeilen] of gruppen) {
+    for (const z of ergebnisZeilen) zeilen.push(z);
+    const schlimmste = ergebnisZeilen.some(z => z.status === STATUS.STOPP) ? STATUS.STOPP
+      : ergebnisZeilen.some(z => z.status === STATUS.KLAERUNG) ? STATUS.KLAERUNG : STATUS.OK;
+    log("Regel " + name + ": " + (schlimmste === STATUS.KLAERUNG ? "KLÄRUNG" : schlimmste));
+  }
+
+  // Gesamtergebnis: STOPP schlägt KLÄRUNG schlägt FREIGABEVORSCHLAG.
+  let ergebnis = ERGEBNIS.FREIGABE;
+  if (zeilen.some(z => z.status === STATUS.KLAERUNG)) ergebnis = ERGEBNIS.KLAERUNG;
+  if (zeilen.some(z => z.status === STATUS.STOPP)) ergebnis = ERGEBNIS.STOPP;
+
+  const zahlbar = berechneZahlbetrag(rechnung, bestellung, wareneingaenge, preisZeilen, richtlinie);
+  const skonto = berechneSkonto(rechnung, bestellung, zahlbar, opt.heute);
+  const vierAugen = zahlbar.bruttoCent > euroZuCent(richtlinie.freigabe.einfacheFreigabeBisBruttoEuro) ||
+                    (rechnung.bruttoCent || 0) > euroZuCent(richtlinie.freigabe.einfacheFreigabeBisBruttoEuro);
+
+  const auffaellig = zeilen.filter(z => z.status !== STATUS.OK);
+  let begruendung;
+  if (ergebnis === ERGEBNIS.FREIGABE) {
+    begruendung = "Rechnung, Bestellung und Wareneingang stimmen überein; Rechenweg und IBAN sind korrekt, keine Auffälligkeiten.";
+  } else {
+    begruendung = auffaellig.map(z => z.pruefpunkt + ": " + z.begruendung).join(" ");
+  }
+
+  const resultat = {
+    rechnung: rechnung,
+    bestellung: bestellung,
+    wareneingaenge: wareneingaenge,
+    lieferant: lieferant,
+    zeilen: zeilen,
+    ergebnis: ergebnis,
+    begruendung: begruendung,
+    zahlbar: zahlbar,
+    skonto: ergebnis === ERGEBNIS.FREIGABE ? skonto : null,
+    skontoMoeglich: skonto,          // für die Sortierung (Skonto-Rechnungen zuerst)
+    vierAugen: vierAugen,
+    freigaberegel: vierAugen ? richtlinie.freigabe.regelUeber : richtlinie.freigabe.regelBis,
+    mail: ergebnis === ERGEBNIS.KLAERUNG ? erstelleMailEntwurf(rechnung, bestellung, lieferant, zeilen, zahlbar) : null,
+    stopp: ergebnis === ERGEBNIS.STOPP ? erstelleStoppAnweisung(lieferant, richtlinie, zeilen) : null
+  };
+  log("Ergebnis: " + ergebnis + (ergebnis === ERGEBNIS.STOPP
+    ? " – Zahlung gesperrt; nach Klärung höchstens " + euro(zahlbar.bruttoCent) + " brutto"
+    : " – zahlbar laut Richtlinie " + euro(zahlbar.bruttoCent) + " brutto"));
+  return resultat;
+}
+
+// Rechnungen mit Skonto zuerst (Richtlinie Abschnitt 5), früheste Frist zuerst.
+function sortiereNachSkonto(resultate) {
+  return resultate.slice().sort((a, b) => {
+    const fa = a.skontoMoeglich ? a.skontoMoeglich.fristDatum.getTime() : Infinity;
+    const fb = b.skontoMoeglich ? b.skontoMoeglich.fristDatum.getTime() : Infinity;
+    return fa - fb;
+  });
+}
+</script>
+
+<!-- ======================================================================
+     3. OBERFLÄCHE: Upload, Anzeige, Protokoll, Entscheidung durch den Menschen
+     Sicherheit: Inhalte aus Rechnungen werden ausschließlich als Text
+     (textContent) angezeigt, nie als HTML. So kann eine präparierte Rechnung
+     keinen Code in die Seite einschleusen.
+     ====================================================================== -->
+<script id="oberflaeche">
+"use strict";
+
+const TESTRECHNUNGEN = [
+  "testdaten/Rechnung_1_Klemmtechnik.txt",
+  "testdaten/Rechnung_2_Kabelwerk.txt",
+  "testdaten/Rechnung_3_RelaisSignal.txt"
+];
+const MAX_DATEIGROESSE = 200 * 1024;   // 200 KB – eine Text-Rechnung ist viel kleiner
+
+let WISSEN = null;          // wird aus daten/*.json geladen
+let resultate = [];         // alle geprüften Rechnungen dieser Sitzung
+const protokollEintraege = [];
+
+// ---------- Protokoll ----------
+function uhrzeit() {
+  const d = new Date();
+  return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, "0")).join(":");
+}
+
+function protokolliere(akteur, text) {
+  const eintrag = uhrzeit() + "  [" + akteur + "]  " + text;
+  protokollEintraege.push(eintrag);
+  const zeile = document.createElement("div");
+  zeile.textContent = eintrag;                 // nur Text, nie HTML
+  const box = document.getElementById("protokoll");
+  box.appendChild(zeile);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ---------- Kleiner Helfer zum sicheren Erzeugen von Elementen ----------
+// Kinder sind entweder Elemente oder Text; Text wird immer als textContent gesetzt.
+function el(tag, attribute, ...kinder) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attribute || {})) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const kind of kinder.flat()) {
+    if (kind === null || kind === undefined) continue;
+    e.appendChild(typeof kind === "string" ? document.createTextNode(kind) : kind);
+  }
+  return e;
+}
+
+function meldung(text, art) {
+  const box = document.getElementById("eingang-meldungen");
+  box.appendChild(el("div", { class: "meldung " + (art || "info") }, text));
+}
+
+// ---------- Wissen laden ----------
+async function ladeJson(pfad) {
+  const antwort = await fetch(pfad, { cache: "no-store" });
+  if (!antwort.ok) throw new Error(pfad + ": HTTP " + antwort.status);
+  return antwort.json();
+}
+
+async function ladeWissen() {
+  const status = document.getElementById("wissen-status");
+  try {
+    const [b, w, l, r] = await Promise.all([
+      ladeJson("daten/bestellungen.json"),
+      ladeJson("daten/wareneingaenge.json"),
+      ladeJson("daten/lieferanten.json"),
+      ladeJson("daten/richtlinie.json")
+    ]);
+    // Grobe Strukturprüfung: ohne vollständiges Wissen wird NICHT geprüft (fail closed).
+    if (!Array.isArray(b.bestellungen) || !Array.isArray(w.wareneingaenge) ||
+        !Array.isArray(l.lieferanten) || !r.toleranzen || !r.betrugsschutz) {
+      throw new Error("Wissensdateien haben ein unerwartetes Format.");
+    }
+    WISSEN = { bestellungen: b.bestellungen, wareneingaenge: w.wareneingaenge, lieferanten: l.lieferanten, richtlinie: r };
+    status.textContent = "Wissensbasis geladen: " + b.bestellungen.length + " Bestellungen, " +
+      w.wareneingaenge.length + " Wareneingänge, " + l.lieferanten.length + " Lieferanten, Richtlinie.";
+    document.getElementById("knopf-test").disabled = false;
+    document.getElementById("datei-eingabe").disabled = false;
+    protokolliere("Agent", "Wissensbasis aus daten/ geladen.");
+  } catch (fehler) {
+    status.className = "meldung fehler";
+    status.textContent = "Wissensbasis konnte nicht geladen werden (" + fehler.message + "). " +
+      "Ohne Bestellungen, Wareneingänge und Richtlinie prüft der Agent nicht. " +
+      "Bitte die App über GitHub Pages oder einen lokalen Webserver öffnen (nicht per Doppelklick als Datei).";
+    protokolliere("System", "FEHLER beim Laden der Wissensbasis: " + fehler.message);
+  }
+}
+
+// ---------- Rechnungen verarbeiten ----------
+function verarbeiteText(text, dateiname) {
+  if (!WISSEN) { meldung("Wissensbasis fehlt – Prüfung nicht möglich.", "fehler"); return; }
+  protokolliere("Eingang", "Rechnung empfangen: " + dateiname);
+  const rechnung = parseRechnung(text, dateiname);
+  protokolliere("Parser", "Ausgelesen: " + (rechnung.lieferant || "?") + ", Nr. " + (rechnung.rechnungsnummer || "?") +
+    ", Bestellung " + (rechnung.bestellnummer || "?") + ", " + rechnung.positionen.length + " Position(en)" +
+    (rechnung.fehlendeFelder.length ? ", fehlend: " + rechnung.fehlendeFelder.join(", ") : ""));
+  const bekannte = resultate.map(r => (r.rechnung.lieferantennummer || "") + "|" + (r.rechnung.rechnungsnummer || ""));
+  const resultat = pruefeRechnung(rechnung, WISSEN, {
+    bekannteRechnungen: bekannte,
+    heute: new Date(),
+    protokoll: text => protokolliere("Regeln", text)
+  });
+  resultat.id = "r" + (resultate.length + 1);
+  resultat.entscheidung = null;
+  resultate.push(resultat);
+}
+
+function leseDatei(datei) {
+  return new Promise((ok, fehler) => {
+    const leser = new FileReader();
+    leser.onload = () => ok(leser.result);
+    leser.onerror = () => fehler(leser.error);
+    leser.readAsText(datei, "UTF-8");
+  });
+}
+
+async function verarbeiteDateien(dateien) {
+  for (const datei of Array.from(dateien)) {
+    // Eingaben prüfen: nur kleine .txt-Dateien
+    if (!/\.txt$/i.test(datei.name)) {
+      meldung("„" + datei.name + "“ wurde ignoriert: nur .txt-Dateien sind erlaubt.", "fehler");
+      protokolliere("Eingang", "Abgelehnt (kein .txt): " + datei.name);
+      continue;
+    }
+    if (datei.size > MAX_DATEIGROESSE) {
+      meldung("„" + datei.name + "“ ist zu groß (max. 200 KB).", "fehler");
+      protokolliere("Eingang", "Abgelehnt (zu groß): " + datei.name);
+      continue;
+    }
+    try {
+      verarbeiteText(await leseDatei(datei), datei.name);
+    } catch (f) {
+      meldung("„" + datei.name + "“ konnte nicht gelesen werden.", "fehler");
+      protokolliere("Eingang", "Lesefehler: " + datei.name);
+    }
+  }
+  zeigeErgebnisse();
+}
+
+async function ladeTestrechnungen() {
+  for (const pfad of TESTRECHNUNGEN) {
+    try {
+      const antwort = await fetch(pfad, { cache: "no-store" });
+      if (!antwort.ok) throw new Error("HTTP " + antwort.status);
+      verarbeiteText(await antwort.text(), pfad.split("/").pop());
+    } catch (f) {
+      meldung("Testrechnung " + pfad + " konnte nicht geladen werden (" + f.message + ").", "fehler");
+      protokolliere("Eingang", "Testrechnung nicht ladbar: " + pfad);
+    }
+  }
+  zeigeErgebnisse();
+}
+
+// ---------- Anzeige ----------
+const ANZEIGE_STATUS = { OK: "OK", KLAERUNG: "KLÄRUNG", STOPP: "STOPP" };
+
+function statusMarke(status) {
+  // CSS-Klasse ohne Umlaut, Anzeige-Text mit Umlaut. Farbe + Text (nicht nur Farbe).
+  const klasse = status === "KLÄRUNG" ? "KLAERUNG" : status;
+  return el("span", { class: "status " + klasse }, ANZEIGE_STATUS[status] || status);
+}
+
+function zeigeErgebnisse() {
+  const container = document.getElementById("ergebnisse");
+  container.replaceChildren();
+  for (const r of sortiereNachSkonto(resultate)) container.appendChild(baueKarte(r));
+}
+
+function baueKarte(r) {
+  const rg = r.rechnung;
+  const rahmen = r.ergebnis === "STOPP" ? "rahmen-stopp" : r.ergebnis === "KLÄRUNG" ? "rahmen-klaerung" : "rahmen-ok";
+  const karte = el("article", { class: "karte " + rahmen, id: r.id });
+
+  karte.appendChild(el("div", { class: "kopf" },
+    el("h2", {}, (rg.lieferant || "Unbekannter Lieferant") + " – " + (rg.rechnungsnummer || "ohne Nummer")),
+    statusMarke(r.ergebnis)));
+  karte.appendChild(el("p", { class: "leise" },
+    "Datei: " + (rg.dateiname || "–") + " · Rechnungsdatum: " + (rg.rechnungsdatum || "–") +
+    " · Bestellung: " + (rg.bestellnummer || "–") + " · Brutto laut Rechnung: " + euro(rg.bruttoCent)));
+
+  // Prüftabelle
+  karte.appendChild(el("h3", {}, "Prüftabelle (3-Way-Match)"));
+  const tabelle = el("table", {},
+    el("thead", {}, el("tr", {}, ["Prüfpunkt", "Rechnung", "Bestellung", "Wareneingang", "Status"].map(t => el("th", { scope: "col" }, t)))),
+    el("tbody", {}, r.zeilen.map(z => el("tr", { title: z.begruendung },
+      el("td", {}, z.pruefpunkt, el("div", { class: "leise" }, z.begruendung)),
+      el("td", {}, z.rechnung), el("td", {}, z.bestellung), el("td", {}, z.wareneingang),
+      el("td", {}, statusMarke(z.status))))));
+  karte.appendChild(el("div", { class: "tabelle-rahmen" }, tabelle));
+
+  // Begründung
+  karte.appendChild(el("h3", {}, "Begründung"));
+  karte.appendChild(el("p", {}, r.begruendung));
+
+  // Zahlbetrag mit Rechenweg
+  karte.appendChild(el("h3", {}, "Zahlbetrag laut Richtlinie"));
+  karte.appendChild(el("p", {}, el("strong", {}, euro(r.zahlbar.nettoCent) + " netto · " + euro(r.zahlbar.bruttoCent) + " brutto"),
+    r.ergebnis === "STOPP" ? " – Zahlung gesperrt, bis der Stopp-Grund geklärt ist." : ""));
+  karte.appendChild(el("ul", { class: "kurz" }, r.zahlbar.rechenweg.map(s => el("li", {}, s))));
+  karte.appendChild(el("p", { class: "leise" }, r.freigaberegel));
+
+  // Ergebnis-spezifische Hinweise
+  if (r.ergebnis === "FREIGABEVORSCHLAG") {
+    karte.appendChild(el("h3", {}, "Skonto"));
+    if (r.skonto) {
+      karte.appendChild(el("p", {}, "Skontofrist: ", el("strong", {}, r.skonto.frist),
+        " · " + r.skonto.prozent + " % Skonto = " + euro(r.skonto.skontoCent) +
+        " → Zahlbetrag bei Skonto " + euro(r.skonto.zahlbetragMitSkontoCent) +
+        " · Netto fällig bis " + r.skonto.nettoFrist + ". " + r.skonto.hinweis));
+    } else {
+      karte.appendChild(el("p", {}, "Laut Bestellung ist kein Skonto vereinbart."));
+    }
+  }
+  if (r.mail) {
+    karte.appendChild(el("h3", {}, "Mail-Entwurf an den Lieferanten"));
+    karte.appendChild(el("p", { class: "leise" }, "Empfänger aus dem Lieferantenstamm (nicht aus der Rechnung). Entwurf – wird nicht automatisch versendet."));
+    const mailText = "An: " + r.mail.an + "\nBetreff: " + r.mail.betreff + "\n\n" + r.mail.text;
+    karte.appendChild(el("pre", {}, mailText));
+    karte.appendChild(el("button", { type: "button", onclick: () => kopiere(mailText, r) }, "Entwurf kopieren"));
+  }
+  if (r.stopp) {
+    karte.appendChild(el("h3", {}, "Handlungsanweisung (Richtlinie, Abschnitt 4)"));
+    karte.appendChild(el("div", { class: "meldung fehler" },
+      el("strong", {}, "STOPP: "), r.stopp.anweisung,
+      el("ul", { class: "kurz" }, r.stopp.gruende.map(g => el("li", {}, g))),
+      el("p", {}, el("strong", {}, r.stopp.rueckruf)),
+      el("p", {}, r.stopp.hinweis)));
+  }
+
+  // Originaltext (nur als Text!)
+  karte.appendChild(el("details", {}, el("summary", {}, "Originaltext der Rechnung anzeigen"), el("pre", {}, rg.rohtext)));
+
+  karte.appendChild(baueEntscheidung(r));
+  return karte;
+}
+
+async function kopiere(text, r) {
+  try {
+    await navigator.clipboard.writeText(text);
+    protokolliere("Mensch", "Mail-Entwurf zu " + r.rechnung.rechnungsnummer + " kopiert.");
+  } catch (f) {
+    meldung("Kopieren nicht möglich – bitte den Text manuell markieren.", "fehler");
+  }
+}
+
+// ---------- Entscheidung durch den Menschen (Autonomiestufe 4) ----------
+// Der Agent macht nur einen Vorschlag. Erst ein Mensch entscheidet – und
+// selbst "Freigeben" löst KEINE Zahlung aus, sondern dokumentiert nur die Entscheidung.
+function baueEntscheidung(r) {
+  const bereich = el("div", { class: "entscheidung" });
+  bereich.appendChild(el("h3", {}, "Entscheidung durch den Menschen"));
+
+  if (r.entscheidung) {
+    bereich.appendChild(el("p", {}, statusMarke(r.entscheidung.art), " durch " + r.entscheidung.person +
+      (r.entscheidung.zweitePerson ? " und " + r.entscheidung.zweitePerson : "") + " um " + r.entscheidung.zeit +
+      (r.entscheidung.art === "FREIGEGEBEN" ? " – Betrag " + euro(r.zahlbar.bruttoCent) + " zur Zahlung im ERP vorgemerkt (die App selbst zahlt nicht)." : "")));
+    return bereich;
+  }
+
+  const name = el("input", { type: "text", autocomplete: "name", placeholder: "Name der prüfenden Person" });
+  bereich.appendChild(el("label", {}, "Prüfer/in (Pflicht, für das Protokoll):", name));
+
+  let zweite = null;
+  if (r.vierAugen) {
+    zweite = el("input", { type: "text", placeholder: "Name Bereichsleitung" });
+    bereich.appendChild(el("label", {}, "Vier-Augen-Prinzip (über 5.000 € brutto): zweite Freigabe durch Bereichsleitung", zweite));
+  }
+
+  // Bei STOPP darf nur freigegeben werden, wenn der Rückruf über den Stamm bestätigt wurde.
+  let rueckruf = null;
+  if (r.ergebnis === "STOPP") {
+    rueckruf = el("input", { type: "checkbox" });
+    bereich.appendChild(el("label", {}, rueckruf,
+      "Rückruf über die Nummer im Lieferantenstamm ist erfolgt, Bankverbindung ist bestätigt, und die Auffälligkeiten sind geklärt."));
+  }
+
+  const knopfFrei = el("button", { type: "button", class: "freigeben" }, "Freigeben (" + euro(r.zahlbar.bruttoCent) + ")");
+  const knopfKlaer = el("button", { type: "button", class: "klaeren" }, "Klärung starten");
+  const knopfSperr = el("button", { type: "button", class: "sperren" }, "Sperren");
+  bereich.append(knopfFrei, knopfKlaer, knopfSperr);
+  const hinweis = el("p", { class: "leise" }, "Ein Klick dokumentiert nur die Entscheidung. Es wird keine Zahlung ausgelöst.");
+  bereich.appendChild(hinweis);
+
+  // Abgelehnte Versuche werden ebenfalls protokolliert (Nachvollziehbarkeit).
+  const ablehnen = (text, feld) => {
+    hinweis.textContent = text;
+    protokolliere("System", "Entscheidung zu " + r.rechnung.rechnungsnummer + " nicht angenommen: " + text);
+    if (feld) feld.focus();
+  };
+  const entscheide = art => {
+    const person = name.value.trim();
+    if (!person) return ablehnen("Bitte zuerst den Namen der prüfenden Person eintragen.", name);
+    if (art === "FREIGEGEBEN") {
+      if (rueckruf && !rueckruf.checked) return ablehnen("Freigabe bei STOPP erst nach dokumentiertem Rückruf über den Lieferantenstamm.", rueckruf);
+      if (zweite && !zweite.value.trim()) return ablehnen("Für über 5.000 € brutto ist eine zweite Freigabe durch die Bereichsleitung nötig.", zweite);
+      if (r.zahlbar.bruttoCent <= 0) return ablehnen("Es gibt keinen zahlbaren Betrag – Freigabe nicht sinnvoll.");
+    }
+    r.entscheidung = { art: art, person: person, zweitePerson: zweite && art === "FREIGEGEBEN" ? zweite.value.trim() : null, zeit: uhrzeit() };
+    const abweichend = (art === "FREIGEGEBEN" && r.ergebnis !== "FREIGABEVORSCHLAG") ? " (abweichend vom Vorschlag " + r.ergebnis + ")" : "";
+    protokolliere("Mensch", art + abweichend + " – Rechnung " + r.rechnung.rechnungsnummer + " durch " + person +
+      (r.entscheidung.zweitePerson ? " und " + r.entscheidung.zweitePerson : "") +
+      (art === "FREIGEGEBEN" ? ", Betrag " + euro(r.zahlbar.bruttoCent) + " brutto (keine Zahlung durch die App)" : ""));
+    zeigeErgebnisse();
+  };
+  knopfFrei.addEventListener("click", () => entscheide("FREIGEGEBEN"));
+  knopfKlaer.addEventListener("click", () => entscheide("KLAERUNG"));
+  knopfSperr.addEventListener("click", () => entscheide("GESPERRT"));
+  return bereich;
+}
+
+// ---------- Protokoll herunterladen ----------
+function ladeProtokollHerunter() {
+  const kopf = "Prüfprotokoll Rechnungsprüfungs-Agent LAT (Prototyp, erfundene Daten)\nErstellt: " + new Date().toLocaleString("de-DE") + "\n\n";
+  const blob = new Blob([kopf + protokollEintraege.join("\n") + "\n"], { type: "text/plain;charset=utf-8" });
+  const link = el("a", { href: URL.createObjectURL(blob), download: "pruefprotokoll.txt" });
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  protokolliere("System", "Protokoll heruntergeladen.");
+}
+
+// ---------- Ereignisse verbinden ----------
+document.getElementById("knopf-test").addEventListener("click", ladeTestrechnungen);
+document.getElementById("datei-eingabe").addEventListener("change", e => {
+  verarbeiteDateien(e.target.files);
+  e.target.value = "";          // gleiche Datei kann erneut gewählt werden
+});
+document.getElementById("knopf-reset").addEventListener("click", () => {
+  resultate = [];
+  document.getElementById("eingang-meldungen").replaceChildren();
+  zeigeErgebnisse();
+  protokolliere("Mensch", "Alle Rechnungen zurückgesetzt.");
+});
+document.getElementById("knopf-protokoll").addEventListener("click", ladeProtokollHerunter);
+
+const ablage = document.getElementById("ablage");
+["dragenter", "dragover"].forEach(ev => ablage.addEventListener(ev, e => { e.preventDefault(); ablage.classList.add("aktiv"); }));
+["dragleave", "drop"].forEach(ev => ablage.addEventListener(ev, e => { e.preventDefault(); ablage.classList.remove("aktiv"); }));
+ablage.addEventListener("drop", e => {
+  if (!WISSEN) { meldung("Wissensbasis fehlt – Prüfung nicht möglich.", "fehler"); return; }
+  verarbeiteDateien(e.dataTransfer.files);
+});
+// Verhindert, dass der Browser eine daneben fallen gelassene Datei einfach öffnet.
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => e.preventDefault());
+
+protokolliere("System", "App gestartet. Autonomiestufe 4: Agent schlägt vor, Mensch entscheidet.");
+ladeWissen();
+</script>
+</body>
+</html>

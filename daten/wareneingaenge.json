@@ -1,0 +1,56 @@
+{
+  "_hinweis": "Erfundene Testdaten. Quelle: testdaten/2_Wareneingaenge.txt (was im Lager der LAT wirklich angekommen ist).",
+  "wareneingaenge": [
+    {
+      "wareneingangsnummer": "WE-50071",
+      "datum": "09.10.2026",
+      "bestellnummer": "B-4500012",
+      "lieferant": "Kabelwerk Nordhafen GmbH",
+      "lieferscheinnummer": "LS-88120",
+      "positionen": [
+        {
+          "pos": "10",
+          "materialnummer": "M-77001",
+          "bezeichnung": "Spezialkabel 4x2,5 mm², Rolle 50 m",
+          "bestellt": 100,
+          "geliefert": 90,
+          "bemerkung": "Teillieferung, laut Fahrer kommt der Rest später"
+        }
+      ]
+    },
+    {
+      "wareneingangsnummer": "WE-50072",
+      "datum": "10.10.2026",
+      "bestellnummer": "B-4500013",
+      "lieferant": "Klemmtechnik Spree GmbH",
+      "lieferscheinnummer": "LS-30455",
+      "positionen": [
+        {
+          "pos": "10",
+          "materialnummer": "M-77015",
+          "bezeichnung": "Reihenklemme 6 mm², grau",
+          "bestellt": 500,
+          "geliefert": 500,
+          "bemerkung": "vollständig, keine Mängel"
+        }
+      ]
+    },
+    {
+      "wareneingangsnummer": "WE-50073",
+      "datum": "14.10.2026",
+      "bestellnummer": "B-4500014",
+      "lieferant": "Relais & Signal Werke AG",
+      "lieferscheinnummer": "LS-7712",
+      "positionen": [
+        {
+          "pos": "10",
+          "materialnummer": "M-78040",
+          "bezeichnung": "Signalrelais 24 V, Bahnausführung",
+          "bestellt": 20,
+          "geliefert": 20,
+          "bemerkung": "vollständig"
+        }
+      ]
+    }
+  ]
+}
