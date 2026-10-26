@@ -1,0 +1,21 @@
+RECHNUNG (Testrechnung, erfunden)
+
+Kabelwerk Nordhafen GmbH
+Lieferantennummer bei LAT: L-1001
+
+An: LAT, Kreditorenbuchhaltung
+
+Rechnungsnummer: KN-77-2291
+Rechnungsdatum: 13.10.2026
+Ihre Bestellung: B-4500012
+Lieferschein: LS-88120
+
+Pos. | Materialnummer | Bezeichnung | Menge | Einzelpreis netto | Gesamt netto
+10 | M-77001 | Spezialkabel 4x2,5 mm², Rolle 50 m | 100 | 10,00 € | 1.000,00 €
+
+Summe netto: 1.000,00 €
+USt. 19 %: 190,00 €
+Rechnungsbetrag: 1.190,00 €
+
+Zahlbar innerhalb von 14 Tagen mit 2 % Skonto oder 30 Tage netto.
+Bankverbindung: IBAN DE00 1000 0000 0000 1001 01

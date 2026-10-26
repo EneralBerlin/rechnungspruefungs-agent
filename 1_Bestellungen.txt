@@ -1,0 +1,36 @@
+Bestellungen LAT (Einkauf)
+
+Erfundene Testdaten für unseren Prototyp. Die Daten sollen eine Bestellliste aus dem ERP-System der LAT darstellen.
+
+
+Bestellung B-4500012
+Bestelldatum: 01.10.2026
+Lieferant: Kabelwerk Nordhafen GmbH (Lieferantennummer L-1001)
+Bestellt von: Werkstatt Fahrzeugbau
+
+Pos. | Materialnummer | Bezeichnung | Menge | Einzelpreis netto | Gesamt netto
+10 | M-77001 | Spezialkabel 4x2,5 mm², Rolle 50 m | 100 Stück | 10,00 € | 1.000,00 €
+
+Zahlungsbedingung: 14 Tage 2 % Skonto, 30 Tage netto
+
+
+Bestellung B-4500013
+Bestelldatum: 02.10.2026
+Lieferant: Klemmtechnik Spree GmbH (Lieferantennummer L-1002)
+Bestellt von: Montage Signaltechnik
+
+Pos. | Materialnummer | Bezeichnung | Menge | Einzelpreis netto | Gesamt netto
+10 | M-77015 | Reihenklemme 6 mm², grau | 500 Stück | 2,40 € | 1.200,00 €
+
+Zahlungsbedingung: 14 Tage 2 % Skonto, 30 Tage netto
+
+
+Bestellung B-4500014
+Bestelldatum: 05.10.2026
+Lieferant: Relais & Signal Werke AG (Lieferantennummer L-1003)
+Bestellt von: Montage Signaltechnik
+
+Pos. | Materialnummer | Bezeichnung | Menge | Einzelpreis netto | Gesamt netto
+10 | M-78040 | Signalrelais 24 V, Bahnausführung | 20 Stück | 85,00 € | 1.700,00 €
+
+Zahlungsbedingung: 30 Tage netto

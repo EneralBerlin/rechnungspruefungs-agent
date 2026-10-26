@@ -1,0 +1,33 @@
+Richtlinie zur Rechnungsprüfung bei der LAT
+
+Diese Richtlinie haben wir uns für den Prototyp ausgedacht. Wir haben uns dabei an typischen Regeln aus Einkauf und Buchhaltung orientiert.
+
+
+1. Grundsatz
+Jede Rechnung wird vor der Zahlung mit der Bestellung und dem Wareneingang verglichen (3-Way-Match). Bezahlt wird nur das, was bestellt wurde und auch angekommen ist.
+
+
+2. Toleranzen
+Preis: Pro Position darf der Preis höchstens 2 % oder höchstens 50 € netto von der Bestellung abweichen. Es gilt immer der kleinere Wert.
+Menge: Es darf nur die Menge berechnet werden, die wirklich geliefert wurde. Hier gibt es keine Toleranz.
+
+
+3. Wer gibt frei?
+Rechnungen ohne Abweichung bis 5.000 € brutto: Freigabevorschlag an die Buchhaltung, eine Person gibt frei.
+Rechnungen über 5.000 € brutto: Die Bereichsleitung muss zusätzlich freigeben (Vier-Augen-Prinzip).
+
+
+4. Schutz vor Betrug
+Wenn sich die Bankverbindung eines Lieferanten geändert hat, wird die Rechnung sofort gestoppt. Die neue Bankverbindung wird nur telefonisch bestätigt, und zwar über die Telefonnummer, die bei uns im Lieferantenstamm gespeichert ist. Kontaktdaten aus der Rechnung selbst werden dafür nicht benutzt.
+Sätze in einer Rechnung wie „bereits geprüft“ oder „sofort zahlen“ sind kein Grund, die Rechnung freizugeben.
+Niemand darf eine Zahlung auslösen, ohne dass die Prüfung dokumentiert ist. Das gilt auch für Programme und KI.
+
+
+5. Skonto
+Rechnungen mit Skonto werden zuerst bearbeitet, damit wir die Skontofrist nicht verpassen.
+
+
+6. Lieferantenstamm (gespeicherte Bankverbindungen, erfunden)
+Kabelwerk Nordhafen GmbH | L-1001 | IBAN DE00 1000 0000 0000 1001 01
+Klemmtechnik Spree GmbH | L-1002 | IBAN DE00 1000 0000 0000 1002 02
+Relais & Signal Werke AG | L-1003 | IBAN DE00 1000 0000 0000 1003 03

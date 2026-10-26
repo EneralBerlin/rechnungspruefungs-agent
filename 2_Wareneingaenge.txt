@@ -1,0 +1,33 @@
+Wareneingänge LAT (Lager)
+
+Erfundene Testdaten für unseren Prototyp. Hier steht, was im Lager wirklich angekommen ist.
+
+
+Wareneingang WE-50071
+Datum: 09.10.2026
+Gehört zu Bestellung: B-4500012
+Lieferant: Kabelwerk Nordhafen GmbH
+Lieferscheinnummer: LS-88120
+
+Pos. | Materialnummer | Bezeichnung | Bestellt | Geliefert | Bemerkung
+10 | M-77001 | Spezialkabel 4x2,5 mm², Rolle 50 m | 100 | 90 | Teillieferung, laut Fahrer kommt der Rest später
+
+
+Wareneingang WE-50072
+Datum: 10.10.2026
+Gehört zu Bestellung: B-4500013
+Lieferant: Klemmtechnik Spree GmbH
+Lieferscheinnummer: LS-30455
+
+Pos. | Materialnummer | Bezeichnung | Bestellt | Geliefert | Bemerkung
+10 | M-77015 | Reihenklemme 6 mm², grau | 500 | 500 | vollständig, keine Mängel
+
+
+Wareneingang WE-50073
+Datum: 14.10.2026
+Gehört zu Bestellung: B-4500014
+Lieferant: Relais & Signal Werke AG
+Lieferscheinnummer: LS-7712
+
+Pos. | Materialnummer | Bezeichnung | Bestellt | Geliefert | Bemerkung
+10 | M-78040 | Signalrelais 24 V, Bahnausführung | 20 | 20 | vollständig

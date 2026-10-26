@@ -1,0 +1,21 @@
+RECHNUNG (Testrechnung, erfunden)
+
+Klemmtechnik Spree GmbH
+Lieferantennummer bei LAT: L-1002
+
+An: LAT, Kreditorenbuchhaltung
+
+Rechnungsnummer: KS-2026-0418
+Rechnungsdatum: 12.10.2026
+Ihre Bestellung: B-4500013
+Lieferschein: LS-30455
+
+Pos. | Materialnummer | Bezeichnung | Menge | Einzelpreis netto | Gesamt netto
+10 | M-77015 | Reihenklemme 6 mm², grau | 500 | 2,40 € | 1.200,00 €
+
+Summe netto: 1.200,00 €
+USt. 19 %: 228,00 €
+Rechnungsbetrag: 1.428,00 €
+
+Zahlbar innerhalb von 14 Tagen mit 2 % Skonto oder 30 Tage netto.
+Bankverbindung: IBAN DE00 1000 0000 0000 1002 02
